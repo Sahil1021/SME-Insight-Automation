@@ -1,0 +1,13 @@
+langchain
+langchain-groq
+langchain-community
+langchain-experimental
+pandas
+numpy
+matplotlib
+seaborn
+scipy
+python-dotenv
+ipykernel
+jupyter
+openpyxl
