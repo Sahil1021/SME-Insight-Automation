@@ -45,15 +45,17 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
                    "July","August","September","October","November","December"]
     monthly = monthly.reindex([m for m in month_order if m in monthly.index])
 
+    jan_revenue = monthly["total_revenue"].iloc[0]
+    peak_revenue = monthly["total_revenue"].max()
+    growth = round(((peak_revenue - jan_revenue) / jan_revenue) * 100, 1)
+
     analytics_results["monthly_sales_trend"] = {
         "data": monthly.reset_index().to_dict(orient="records"),
         "peak_month": monthly["total_revenue"].idxmax(),
         "lowest_month": monthly["total_revenue"].idxmin(),
-        "peak_revenue": round(monthly["total_revenue"].max(), 2),
+        "peak_revenue": round(peak_revenue, 2),
         "lowest_revenue": round(monthly["total_revenue"].min(), 2),
-        "revenue_growth_jan_to_peak": round(
-            ((monthly["total_revenue"].max() - monthly["total_revenue"].iloc[0])
-             / monthly["total_revenue"].iloc[0]) * 100, 1)
+        "revenue_growth_jan_to_peak": growth
     }
 
     # ── Analysis 2: Pareto Analysis ─────────────────────────
@@ -72,13 +74,14 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
 
     top_20_pct_count = max(1, int(len(pareto_df) * 0.2))
     top_products = pareto_df.head(top_20_pct_count)
+    bottom_products = pareto_df.tail(top_20_pct_count)
 
     analytics_results["pareto_analysis"] = {
         "data": pareto_df.to_dict(orient="records"),
         "top_20pct_products": top_products["product"].tolist(),
         "top_20pct_revenue_share": round(top_products["revenue_pct"].sum(), 1),
-        "bottom_20pct_products": pareto_df.tail(top_20_pct_count)["product"].tolist(),
-        "bottom_20pct_revenue_share": round(pareto_df.tail(top_20_pct_count)["revenue_pct"].sum(), 1),
+        "bottom_20pct_products": bottom_products["product"].tolist(),
+        "bottom_20pct_revenue_share": round(bottom_products["revenue_pct"].sum(), 1),
         "total_products": len(pareto_df)
     }
 
@@ -98,8 +101,7 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
     analytics_results["category_performance"] = {
         "data": category.reset_index().to_dict(orient="records"),
         "top_category": category["total_revenue"].idxmax(),
-        "top_category_revenue_share": round(
-            category["revenue_share_pct"].max(), 1),
+        "top_category_revenue_share": round(category["revenue_share_pct"].max(), 1),
         "lowest_margin_category": category["avg_margin"].idxmin(),
         "highest_margin_category": category["avg_margin"].idxmax()
     }
@@ -132,6 +134,7 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
 
     # ── Analysis 5: Revenue and Margin KPIs ────────────────
     print("Running: KPI calculations...")
+    region_revenue = df.groupby("region")["revenue"].sum()
     analytics_results["kpis"] = {
         "total_revenue": round(df["revenue"].sum(), 2),
         "total_gross_profit": round(df["gross_profit"].sum(), 2),
@@ -140,9 +143,8 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
         "avg_transaction_value": round(df["revenue"].mean(), 2),
         "total_units_sold": int(df["quantity_sold"].sum()),
         "revenue_per_day": round(df["revenue"].sum() / 365, 2),
-        "best_performing_region": df.groupby("region")["revenue"].sum().idxmax(),
-        "best_region_revenue": round(
-            df.groupby("region")["revenue"].sum().max(), 2),
+        "best_performing_region": region_revenue.idxmax(),
+        "best_region_revenue": round(region_revenue.max(), 2),
         "top_supplier_by_revenue": df.groupby("supplier")["revenue"].sum().idxmax()
     }
 
@@ -165,21 +167,28 @@ def run_analytics_agent(filepath: str, data_understanding_output: dict) -> dict:
     # ── LLM Interprets Results ─────────────────────────────
     print("\nLLM interpreting analytical results...")
 
+    kpis = analytics_results["kpis"]
     summary_for_llm = {
-        "kpis": analytics_results["kpis"],
+        "kpis": kpis,
         "peak_month": analytics_results["monthly_sales_trend"]["peak_month"],
         "lowest_month": analytics_results["monthly_sales_trend"]["lowest_month"],
+        "peak_revenue": analytics_results["monthly_sales_trend"]["peak_revenue"],
         "pareto_top_products": analytics_results["pareto_analysis"]["top_20pct_products"],
         "pareto_top_revenue_share": analytics_results["pareto_analysis"]["top_20pct_revenue_share"],
         "top_category": analytics_results["category_performance"]["top_category"],
+        "highest_margin_category": analytics_results["category_performance"]["highest_margin_category"],
+        "lowest_margin_category": analytics_results["category_performance"]["lowest_margin_category"],
         "stockout_products": analytics_results["inventory_analysis"]["stockout_products"],
         "slow_moving_products": analytics_results["inventory_analysis"]["slow_moving_products"],
-        "best_region": analytics_results["kpis"]["best_performing_region"]
+        "best_region": kpis["best_performing_region"],
+        "best_region_revenue": kpis["best_region_revenue"],
+        "top_supplier": kpis["top_supplier_by_revenue"]
     }
 
     prompt = f"""
 You are a business analyst interpreting analytical results for an SME retail business.
 All numbers below were computed using Python. Do not change or question them.
+Always use £ (British Pound) for all currency values.
 Interpret what these results mean for the business owner.
 
 ANALYTICAL RESULTS SUMMARY:
@@ -188,7 +197,7 @@ ANALYTICAL RESULTS SUMMARY:
 Provide a structured analytical interpretation covering:
 
 SALES PERFORMANCE:
-[Interpret revenue, transactions, and seasonal trends]
+[Interpret revenue, transactions, and seasonal trends using exact figures]
 
 PRODUCT INSIGHTS:
 [Interpret the Pareto findings and what they mean]
@@ -197,9 +206,10 @@ INVENTORY FINDINGS:
 [Interpret stockout risks and slow movers]
 
 REGIONAL INSIGHTS:
-[Interpret regional performance]
+[Interpret regional performance using exact figures]
 
-Keep each section to 3-4 sentences. Be specific with numbers. Write for a non-technical business owner.
+Keep each section to 3-4 sentences. Be specific with numbers.
+Write for a non-technical business owner. Use £ for all currency.
 """
 
     response = llm.invoke(prompt)

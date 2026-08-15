@@ -29,23 +29,33 @@ def run_critic_agent(analytics_output: dict,
     pareto = analytics["pareto_analysis"]
     monthly = analytics["monthly_sales_trend"]
     inventory = analytics["inventory_analysis"]
+    category = analytics["category_performance"]
 
-    # Ground truth from Python computation
     ground_truth = {
         "total_revenue": kpis["total_revenue"],
         "total_gross_profit": kpis["total_gross_profit"],
         "gross_margin_pct": kpis["overall_gross_margin_pct"],
         "total_transactions": kpis["total_transactions"],
         "avg_transaction_value": kpis["avg_transaction_value"],
+        "revenue_per_day": kpis["revenue_per_day"],
+        "total_units_sold": kpis["total_units_sold"],
         "peak_month": monthly["peak_month"],
         "lowest_month": monthly["lowest_month"],
         "peak_revenue": monthly["peak_revenue"],
+        "lowest_revenue": monthly["lowest_revenue"],
+        "revenue_growth_jan_to_peak": monthly["revenue_growth_jan_to_peak"],
         "top_products": pareto["top_20pct_products"],
         "top_products_revenue_share": pareto["top_20pct_revenue_share"],
-        "slow_moving_products": inventory["slow_moving_products"],
-        "stockout_products": inventory["stockout_products"],
+        "bottom_products": pareto["bottom_20pct_products"],
+        "bottom_products_revenue_share": pareto["bottom_20pct_revenue_share"],
+        "top_category": category["top_category"],
+        "highest_margin_category": category["highest_margin_category"],
+        "lowest_margin_category": category["lowest_margin_category"],
         "best_region": kpis["best_performing_region"],
-        "top_supplier": kpis["top_supplier_by_revenue"]
+        "best_region_revenue": kpis["best_region_revenue"],
+        "top_supplier": kpis["top_supplier_by_revenue"],
+        "slow_moving_products": inventory["slow_moving_products"],
+        "stockout_products": inventory["stockout_products"]
     }
 
     prompt = f"""
@@ -71,8 +81,8 @@ If all facts are consistent, state "All facts verified as consistent."
 
 2. HALLUCINATION CHECK:
 Identify any claims, statistics, or figures mentioned that do not appear
-in the ground truth data and cannot be verified. If none, state "No
-hallucinations detected."
+in the ground truth data and cannot be verified. If none found, state
+"No hallucinations detected."
 
 3. COMPLETENESS CHECK:
 Are all major findings from the analytics covered in the insights?
@@ -97,7 +107,6 @@ this output for a non-technical business owner.
     print("\nRunning quality review...")
     response = llm.invoke(prompt)
 
-    # Parse overall score from response
     output = {
         "agent": "Critic Agent",
         "status": "completed",
