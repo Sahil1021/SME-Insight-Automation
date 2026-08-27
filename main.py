@@ -25,7 +25,7 @@ def run_pipeline(data_filepath: str, scenario_name: str) -> dict:
     os.makedirs(output_dir, exist_ok=True)
 
     agent1_output = run_data_understanding_agent(data_filepath)
-    agent2_output = run_analytics_agent(data_filepath, agent1_output)
+    agent2_output = run_analytics_agent(data_filepath, agent1_output, output_dir, scenario_name)
     agent3_output = run_insight_generation_agent(agent2_output)
     agent4_output = run_recommendation_agent(agent2_output, agent3_output)
     agent5_output = run_critic_agent(agent2_output, agent3_output, agent4_output)
